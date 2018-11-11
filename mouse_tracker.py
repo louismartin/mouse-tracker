@@ -1,12 +1,10 @@
-import random
 import sys
 import math
 from threading import Thread
 import time
 
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow, QLabel
-from PyQt5.QtGui import QPainter, QColor, QPen
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
+from PyQt5.QtGui import QPainter, QColor
 from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, pyqtSlot
 from pynput import mouse
 
@@ -18,7 +16,6 @@ class Counter():
         self.decay = decay
         self.last_timestamp = time.time()
         self.count = 0
-        self.last_print = time.time()
 
     def increment(self, increment):
         current_timestamp = time.time()
@@ -58,31 +55,20 @@ class Worker(QObject):
     '''Inspired from https://stackoverflow.com/a/41605909/4255993'''
 
     sig_emit_score = pyqtSignal(float)
-    sig_done = pyqtSignal(str)
-    sig_msg = pyqtSignal(str)
-
-    def __init__(self):
-        super().__init__()
-        self.__abort = False
 
     @pyqtSlot()
     def work(self):
-        thread_name = QThread.currentThread().objectName()
-        thread_id = int(QThread.currentThreadId())  # Casting to int is necessary
         counter = Counter(emit_score=self.sig_emit_score.emit, decay=1)
         counter_updater = CounterUpdater(counter)
-        with mouse.Listener(on_move=counter.on_move, on_click=counter.on_click, on_scroll=counter.on_scroll) as listener:
+        with mouse.Listener(on_move=counter.on_move,
+                            on_click=counter.on_click,
+                            on_scroll=counter.on_scroll) as listener:
             counter_updater.start()
             listener.join()
             counter_updater.join()
 
-    def abort(self):
-        self.sig_msg.emit('Abort')
-        self.__abort = True
-
 
 class App(QMainWindow):
-    sig_abort_worker = pyqtSignal()
 
     def __init__(self):
         super().__init__(None, Qt.WindowStaysOnTopHint)
@@ -91,64 +77,35 @@ class App(QMainWindow):
         self.top = 10
         self.width = 440
         self.height = 20
-        self.initUI()
+        self.init_UI()
 
-    def initUI(self):
+    def init_UI(self):
         self.setWindowTitle(self.title)
         self.setGeometry(self.left, self.top, self.width, self.height)
-
         # Set window background color
         self.setAutoFillBackground(True)
         p = self.palette()
         p.setColor(self.backgroundRole(), Qt.white)
         self.setPalette(p)
-
         # Add paint widget and paint
         self.progress_bar = PaintWidget(self, self.width, self.height)
-        self.progress_bar.move(0,0)
+        self.progress_bar.move(0, 0)
         self.progress_bar.resize(self.width, self.height)
-
-
+        # Start mouse listener
         self.start_mouse_listener()
         self.show()
-        # https://stackoverflow.com/a/33453124/4255993
-        # https://wiki.python.org/moin/PyQt/Threading%2C_Signals_and_Slots
-        # https://stackoverflow.com/questions/37252756/simplest-way-for-pyqt-threading/37256736
-        #listener = QMouseListener(on_move=on_move, on_click=on_click, on_scroll=on_scroll)
-        #listener.__exit__()
-        #listener.join()
 
     def start_mouse_listener(self):
         self.worker = Worker()
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
-
         self.worker.sig_emit_score.connect(self.on_worker_emit_score)
-        self.worker.sig_done.connect(self.on_worker_done)
-        self.worker.sig_msg.connect(self.on_worker_msg)
-
-        self.sig_abort_worker.connect(self.worker.abort)
-
         self.thread.started.connect(self.worker.work)
         self.thread.start()
 
     @pyqtSlot(float)
     def on_worker_emit_score(self, score):
         self.progress_bar.fill(score)
-
-    @pyqtSlot(str)
-    def on_worker_done(self, message):
-        print(message)
-
-    @pyqtSlot(str)
-    def on_worker_msg(self, message):
-        print(message)
-
-    @pyqtSlot()
-    def abort_worker(self):
-        self.sig_abort_worker.emit()
-        self.thread.quit()
-        self.thread.wait()
 
 
 class PaintWidget(QWidget):
@@ -169,8 +126,8 @@ class PaintWidget(QWidget):
         n_rectangles = 1000
         rectangle_width = self.width / n_rectangles
         for i in range(round(self.fill_proportion * n_rectangles)):
-             qp.setBrush(QColor(200, 0, 0))
-             qp.drawRect(rectangle_width * i, 0, rectangle_width + 1, self.height)
+            qp.setBrush(QColor(200, 0, 0))
+            qp.drawRect(rectangle_width * i, 0, rectangle_width + 1, self.height)
 
 
 if __name__ == '__main__':
