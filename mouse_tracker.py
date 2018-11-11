@@ -85,7 +85,7 @@ class App(QMainWindow):
     sig_abort_worker = pyqtSignal()
 
     def __init__(self):
-        super().__init__()
+        super().__init__(None, Qt.WindowStaysOnTopHint)
         self.title = 'Mouse tracker'
         self.left = 1000
         self.top = 10
@@ -166,8 +166,9 @@ class PaintWidget(QWidget):
     def paintEvent(self, event):
         qp = QPainter(self)
         qp.setPen(Qt.NoPen)
-        rectangle_width = self.width / 100
-        for i in range(round(self.fill_proportion * 100)):
+        n_rectangles = 1000
+        rectangle_width = self.width / n_rectangles
+        for i in range(round(self.fill_proportion * n_rectangles)):
              qp.setBrush(QColor(200, 0, 0))
              qp.drawRect(rectangle_width * i, 0, rectangle_width + 1, self.height)
 
@@ -176,4 +177,3 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = App()
     sys.exit(app.exec_())
-# Collect events until released
