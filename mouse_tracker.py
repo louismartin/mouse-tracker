@@ -1,6 +1,6 @@
 import sys
 import math
-from threading import Thread, RLock
+from threading import Thread
 import time
 
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
@@ -15,21 +15,29 @@ class MouseMonitor():
         self.emit_score = emit_score
         self.decay = decay
         self.last_timestamp = time.time()
-        self.score = 0
+        self.count = 0
         self.mouse_controller = mouse.Controller()
 
     def increment(self, increment):
-        base_increment = 0.02
+        base_increment = 2
         current_timestamp = time.time()
         delta = current_timestamp - self.last_timestamp
         self.last_timestamp = current_timestamp
-        self.score = self.score * math.exp(-self.decay * delta) + base_increment * increment
-        self.emit_score(min(self.score, 1))
+        self.count = self.count * math.exp(-self.decay * delta) + base_increment * increment
+        score = min(1, self.count / 100)
+        self.emit_score(score)
+        if score == 1:
+            # Deactivate the mouse if score is at maximum
+            self.mouse_controller.position = (0, 0)
+
+
+    def __str__(self):
+        return str(self.count)
+
+    def __repr__(self):
+        return self.__str__()
 
     def on_move(self, x, y):
-        if self.score >= 1:
-            self.deactivate_mouse()
-            return
         self.increment(1)
 
     def on_click(self, x, y, button, pressed):
@@ -37,15 +45,6 @@ class MouseMonitor():
 
     def on_scroll(self, x, y, dx, dy):
         self.increment(1)
-
-    def deactivate_mouse(self):
-        self.mouse_controller.position = (0, 0)
-
-    def __str__(self):
-        return str(self.score)
-
-    def __repr__(self):
-        return self.__str__()
 
 
 class MouseMonitorUpdater(Thread):
