@@ -1,6 +1,6 @@
 import sys
 import math
-from threading import Thread
+from threading import Thread, RLock
 import time
 
 from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow
@@ -9,46 +9,54 @@ from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, pyqtSlot
 from pynput import mouse
 
 
-class Counter():
+class MouseMonitor():
 
     def __init__(self, emit_score, decay=1):
         self.emit_score = emit_score
         self.decay = decay
         self.last_timestamp = time.time()
-        self.count = 0
+        self.score = 0
+        self.mouse_controller = mouse.Controller()
 
     def increment(self, increment):
+        base_increment = 0.02
         current_timestamp = time.time()
         delta = current_timestamp - self.last_timestamp
         self.last_timestamp = current_timestamp
-        self.count = self.count * math.exp(-self.decay * delta) + increment
-        self.emit_score(min(1, self.count / 100))
-
-    def __str__(self):
-        return str(self.count)
-
-    def __repr__(self):
-        return self.__str__()
+        self.score = self.score * math.exp(-self.decay * delta) + base_increment * increment
+        self.emit_score(min(self.score, 1))
 
     def on_move(self, x, y):
+        if self.score >= 1:
+            self.deactivate_mouse()
+            return
         self.increment(1)
 
     def on_click(self, x, y, button, pressed):
-        self.increment(1)
+        self.increment(10)
 
     def on_scroll(self, x, y, dx, dy):
         self.increment(1)
 
+    def deactivate_mouse(self):
+        self.mouse_controller.position = (0, 0)
 
-class CounterUpdater(Thread):
+    def __str__(self):
+        return str(self.score)
 
-    def __init__(self, counter):
+    def __repr__(self):
+        return self.__str__()
+
+
+class MouseMonitorUpdater(Thread):
+
+    def __init__(self, mouse_monitor):
         Thread.__init__(self)
-        self.counter = counter
+        self.mouse_monitor = mouse_monitor
 
     def run(self):
         while True:
-            self.counter.increment(0)  # Increment by 0 only to update score
+            self.mouse_monitor.increment(0)  # Increment by 0 only to update score
 
 
 class Worker(QObject):
@@ -58,14 +66,14 @@ class Worker(QObject):
 
     @pyqtSlot()
     def work(self):
-        counter = Counter(emit_score=self.sig_emit_score.emit, decay=1)
-        counter_updater = CounterUpdater(counter)
-        with mouse.Listener(on_move=counter.on_move,
-                            on_click=counter.on_click,
-                            on_scroll=counter.on_scroll) as listener:
-            counter_updater.start()
+        mouse_monitor = MouseMonitor(emit_score=self.sig_emit_score.emit, decay=1)
+        mouse_monitor_updater = MouseMonitorUpdater(mouse_monitor)
+        with mouse.Listener(on_move=mouse_monitor.on_move,
+                            on_click=mouse_monitor.on_click,
+                            on_scroll=mouse_monitor.on_scroll) as listener:
+            mouse_monitor_updater.start()
             listener.join()
-            counter_updater.join()
+            mouse_monitor_updater.join()
 
 
 class App(QMainWindow):
